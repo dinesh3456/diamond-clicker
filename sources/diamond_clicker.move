@@ -47,7 +47,12 @@ module diamond_clicker::game {
     */
 
     public fun initialize_game(account: &signer) {
-        // move_to account with new GameStore
+        let new_game_store:GameStore=GameStore{
+            diamonds: 0,
+            upgrades: vector<Upgrade>(),
+            last_claimed_timestamp_seconds:0,
+        };
+        move_to(account,new_game_store)
     }
 
     public entry fun click(account: &signer) acquires GameStore {
@@ -241,7 +246,7 @@ module diamond_clicker::game {
         account: &signer,
         test_one: &signer,
     ) acquires GameStore {
-        timestamp::set_time_has_started_for_testing(aptos_framework);
+        timestamp::set_time_zhas_started_for_testing(aptos_framework);
 
         let aptos_framework_address = signer::address_of(aptos_framework);
         let account_address = signer::address_of(account);
