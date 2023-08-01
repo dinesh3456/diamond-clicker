@@ -56,16 +56,45 @@ module diamond_clicker::game {
     }
 
     public entry fun click(account: &signer) acquires GameStore {
-        // check if GameStore does not exist - if not, initialize_game
+        if (!exists<GameStore>(account)) {
+        initialize_game(account);
+        }
 
-        // increment game_store.diamonds by +1
+        move_to<GameStore>(account).diamonds += 1;
     }
 
     fun get_unclaimed_diamonds(account_address: address, current_timestamp_seconds: u64): u64 acquires GameStore {
-        // loop over game_store.upgrades - if the powerup exists then calculate the dpm and minutes_elapsed to add the amount to the unclaimed_diamonds
+    // Acquire the GameStore for the given account_address
+    let game_store = borrow_global<GameStore>(account_address);
 
-        // return unclaimed_diamonds
+    // Initialize the variable to store the total unclaimed diamonds
+    var unclaimed_diamonds: u64 = 0;
+
+    // Loop over game_store.upgrades to calculate unclaimed diamonds from each power-up
+    for (let i: u64 = 0; i < game_store.upgrades.length; i++) {
+        let powerup = game_store.upgrades[i];
+        let powerup_index = i as usize;
+
+        // Check if the powerup_index is within the range of POWERUP_VALUES vector
+        if (powerup_index < POWERUP_VALUES.length) {
+            let powerup_cost = POWERUP_VALUES[powerup_index][0];
+            let powerup_dpm = POWERUP_VALUES[powerup_index][1];
+
+            // Calculate the time elapsed since the last claimed timestamp in minutes
+            let minutes_elapsed = (current_timestamp_seconds - game_store.last_claimed_timestamp_seconds) / 60;
+
+            // Calculate the unclaimed diamonds from this power-up
+            let powerup_unclaimed_diamonds = powerup.amount * powerup_dpm * minutes_elapsed;
+
+            // Add the unclaimed diamonds from this power-up to the total unclaimed diamonds
+            unclaimed_diamonds += powerup_unclaimed_diamonds;
+        }
     }
+
+    // Return the total unclaimed diamonds
+    return unclaimed_diamonds;
+}
+
 
     fun claim(account_address: address) acquires GameStore {
         // set game_store.diamonds to current diamonds + unclaimed_diamonds
