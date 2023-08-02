@@ -97,41 +97,146 @@ module diamond_clicker::game {
 
 
     fun claim(account_address: address) acquires GameStore {
-        // set game_store.diamonds to current diamonds + unclaimed_diamonds
-        // set last_claimed_timestamp_seconds to the current timestamp in seconds
-    }
+    // Acquire the GameStore for the given account_address
+    let game_store = move_from<GameStore>(account_address);
+
+    // Calculate the unclaimed diamonds using get_unclaimed_diamonds function
+    let unclaimed_diamonds = get_unclaimed_diamonds(account_address, timestamp::get_time());
+
+    // Set game_store.diamonds to current diamonds + unclaimed_diamonds
+    game_store.diamonds += unclaimed_diamonds;
+
+    // Set last_claimed_timestamp_seconds to the current timestamp in seconds
+    game_store.last_claimed_timestamp_seconds = timestamp::get_time();
+
+    // Move the updated GameStore back to the Global Storage
+    move_to(account_address, game_store);
+}
+ +
 
     public entry fun upgrade(account: &signer, upgrade_index: u64, upgrade_amount: u64) acquires GameStore {
-        // check that the game store exists
-        // check the powerup_names length is greater than or equal to upgrade_index
-
-        // claim for account address
-
-        // check that the user has enough coins to make the current upgrade
-
-        // loop through game_store upgrades - if the upgrade exists then increment but the upgrade_amount
-
-        // if upgrade_existed does not exist then create it with the base upgrade_amount
-
-        // set game_store.diamonds to current diamonds - total_upgrade_cost
+    // Check if the GameStore exists for the given signer's address
+    if (!exists<GameStore>(account)) {
+        initialize_game(account);
     }
+
+    // Acquire the GameStore for the given signer's address
+    let game_store = borrow_global<GameStore>(account);
+
+    // Check if the upgrade_index is within the range of POWERUP_VALUES
+    if (upgrade_index >= POWERUP_VALUES.length) {
+        // Throw an error - upgrade does not exist
+        return abort(ERROR_UPGRADE_DOES_NOT_EXIST);
+    }
+
+    // Call the claim function to update the unclaimed diamonds before making the upgrade
+    claim(account);
+
+    // Calculate the total cost for the requested upgrade
+    let total_upgrade_cost = POWERUP_VALUES[upgrade_index][0] * upgrade_amount;
+
+    // Check if the user has enough diamonds to make the upgrade
+    if (game_store.diamonds < total_upgrade_cost) {
+        // Throw an error - not enough diamonds to upgrade
+        return abort(ERROR_NOT_ENOUGH_DIAMONDS_TO_UPGRADE);
+    }
+
+    // Loop through the game_store.upgrades to find the requested upgrade
+    let upgrade_existed: bool = false;
+    for (let i: u64 = 0; i < game_store.upgrades.length; i++) {
+        let powerup = game_store.upgrades[i];
+        if (i == upgrade_index) {
+            // Increment the amount of the existing upgrade
+            powerup.amount += upgrade_amount;
+            upgrade_existed = true;
+            break;
+        }
+    }
+
+    // If the upgrade does not exist, create it with the base upgrade_amount
+    if (!upgrade_existed) {
+        let new_upgrade = Upgrade{name: POWERUP_NAMES[upgrade_index], amount: upgrade_amount};
+        game_store.upgrades.push(new_upgrade);
+    }
+
+    // Deduct the total_upgrade_cost from the user's diamonds
+    game_store.diamonds -= total_upgrade_cost;
+
+    // Move the updated GameStore back to the Global Storage
+    move_to(account, game_store);
+}
+
 
     #[view]
     public fun get_diamonds(account_address: address): u64 acquires GameStore {
-        // return game_store.diamonds + unclaimed_diamonds
+    // Check if the GameStore exists for the given account_address
+    if (!exists<GameStore>(account_address)) {
+        initialize_game(account_address);
     }
+
+    // Acquire the GameStore for the given account_address
+    let game_store = borrow_global<GameStore>(account_address);
+
+    // Call the claim function to update the unclaimed diamonds before getting the total diamonds
+    claim(account_address);
+
+    // Calculate the total diamonds including unclaimed diamonds
+    let total_diamonds = game_store.diamonds + get_unclaimed_diamonds(account_address, timestamp::get_time());
+
+    // Return the total diamonds
+    return total_diamonds;
+}
 
     #[view]
-    public fun get_diamonds_per_minute(account_address: address): u64 acquires GameStore {
-        // loop over game_store.upgrades - calculate dpm * current_upgrade.amount to get the total diamonds_per_minute
-
-        // return diamonds_per_minute of all the user's powerups
+   public fun get_diamonds_per_minute(account_address: address): u64 acquires GameStore {
+    // Check if the GameStore exists for the given account_address
+    if (!exists<GameStore>(account_address)) {
+        initialize_game(account_address);
     }
+
+    // Acquire the GameStore for the given account_address
+    let game_store = borrow_global<GameStore>(account_address);
+
+    // Call the claim function to update the unclaimed diamonds before calculating DPM
+    claim(account_address);
+
+    // Initialize the variable to store the total diamonds per minute (DPM)
+    var diamonds_per_minute: u64 = 0;
+
+    // Loop over game_store.upgrades to calculate total DPM
+    for (let i: u64 = 0; i < game_store.upgrades.length; i++) {
+        let powerup = game_store.upgrades[i];
+        let powerup_index = i as usize;
+
+        // Check if the powerup_index is within the range of POWERUP_VALUES vector
+        if (powerup_index < POWERUP_VALUES.length) {
+            let powerup_dpm = POWERUP_VALUES[powerup_index][1];
+
+            // Add the DPM of this power-up multiplied by its amount to the total DPM
+            diamonds_per_minute += powerup.amount * powerup_dpm;
+        }
+    }
+
+    // Return the total DPM
+    return diamonds_per_minute;
+}
 
     #[view]
     public fun get_powerups(account_address: address): vector<Upgrade> acquires GameStore {
-        // return game_store.upgrades
+    // Check if the GameStore exists for the given account_address
+    if (!exists<GameStore>(account_address)) {
+        initialize_game(account_address);
     }
+
+    // Acquire the GameStore for the given account_address
+    let game_store = borrow_global<GameStore>(account_address);
+
+    // Call the claim function to update the unclaimed diamonds before getting the power-ups
+    claim(account_address);
+
+    // Return the list of power-ups from the user's GameStore
+    return game_store.upgrades;
+}
 
     /*
     Tests
